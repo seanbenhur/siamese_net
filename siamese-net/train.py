@@ -152,7 +152,7 @@ def train():
     counter = []
     iteration_number = 0
 
-    for epoch in range(1, config.epochs):
+    for epoch in range(1, config.epochs+1):
         for i, data in enumerate(train_dataloader, 0):
             img0, img1, label = data
             img0, img1, label = img0.cuda(), img1.cuda(), label.cuda()
