@@ -6,6 +6,6 @@
 ## Dataset
 > The dataset that I have used is ICDAR 2011 dataset, which can be downloaded from [here](https://drive.google.com/drive/folders/1hFljH9AKhxxIqH-3fj72mCMA6Xh3Vv0m)
 ## Results
-![](./images/output1.png)
-![](./images/output2.png)
+![](https://github.com/seanbenhur/siamese_net/blob/master/images/output1.PNG?raw=true)
+![](https://github.com/seanbenhur/siamese_net/blob/master/images/output2.PNG?raw=true)
 
