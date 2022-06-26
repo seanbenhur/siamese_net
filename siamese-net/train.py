@@ -85,42 +85,54 @@ imshow(torchvision.utils.make_grid(concatenated))
 print(example_batch[2].numpy())
 
 
-# create a siamese network
+#create a siamese network
 class SiameseNetwork(nn.Module):
     def __init__(self):
         super(SiameseNetwork, self).__init__()
-
+        
         # Setting up the Sequential of CNN Layers
         self.cnn1 = nn.Sequential(
-            nn.Conv2d(1, 96, kernel_size=11, stride=1),
+            
+            nn.Conv2d(1, 96, kernel_size=11,stride=1),
+            nn.BatchNorm2d(96),
+            #nn.LocalResponseNorm(5,alpha=0.0001,beta=0.75,k=2),
             nn.ReLU(inplace=True),
-            nn.LocalResponseNorm(5, alpha=0.0001, beta=0.75, k=2),
             nn.MaxPool2d(3, stride=2),
-            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2),
+            
+            nn.Conv2d(96, 256, kernel_size=5,stride=1,padding=2),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.LocalResponseNorm(5, alpha=0.0001, beta=0.75, k=2),
-            nn.MaxPool2d(3, stride=2),
-            nn.Dropout2d(p=0.3),
-            nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True),
+            #nn.LocalResponseNorm(5,alpha=0.0001,beta=0.75,k=2),
             nn.MaxPool2d(3, stride=2),
             nn.Dropout2d(p=0.3),
-        )
 
+            nn.Conv2d(256,384 , kernel_size=3,stride=1,padding=1),
+            nn.BatchNorm2d(384),
+            nn.ReLU(inplace=True),
+            
+            nn.Conv2d(384,256 , kernel_size=3,stride=1,padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, stride=2),
+            nn.Dropout2d(p=0.3),
+
+        )
+        
         # Defining the fully connected layers
         self.fc1 = nn.Sequential(
             nn.Linear(30976, 1024),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.5),
+            
             nn.Linear(1024, 128),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 2),
-        )
-
+            
+            nn.Linear(128,2))
+        
+  
+  
     def forward_once(self, x):
-        # Forward pass
+        # Forward pass 
         output = self.cnn1(x)
         output = output.view(output.size()[0], -1)
         output = self.fc1(output)
@@ -133,11 +145,12 @@ class SiameseNetwork(nn.Module):
         output2 = self.forward_once(input2)
         return output1, output2
 
+ # Load the dataset as pytorch tensors using dataloader
+train_dataloader = DataLoader(siamese_dataset,
+                        shuffle=True,
+                        num_workers=8,
+                        batch_size=config.batch_size) 
 
-# Load the dataset as pytorch tensors using dataloader
-train_dataloader = DataLoader(
-    siamese_dataset, shuffle=True, num_workers=8, batch_size=config.batch_size
-)
 
 # Declare Siamese Network
 net = SiameseNetwork().cuda()
@@ -146,35 +159,53 @@ criterion = ContrastiveLoss()
 # Declare Optimizer
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=0.0005)
 
-# train the model
-def train():
-    loss = []
-    counter = []
+#train the model
+def train(train_dataloader):
+    loss=[] 
+    counter=[]
     iteration_number = 0
-
-    for epoch in range(1, config.epochs+1):
-        for i, data in enumerate(train_dataloader, 0):
-            img0, img1, label = data
-            img0, img1, label = img0.cuda(), img1.cuda(), label.cuda()
-            optimizer.zero_grad()
-            output1, output2 = net(img0, img1)
-            loss_contrastive = criterion(output1, output2, label)
-            loss_contrastive.backward()
-            optimizer.step()
-
-        print("Epoch {}\n Current loss {}\n".format(epoch, loss_contrastive.item()))
-        iteration_number += 10
-        counter.append(iteration_number)
-        loss.append(loss_contrastive.item())
-    show_plot(counter, loss)
-    return net
+    for i, data in enumerate(train_dataloader,0):
+      img0, img1 , label = data
+      img0, img1 , label = img0.cuda(), img1.cuda() , label.cuda()
+      optimizer.zero_grad()
+      output1,output2 = net(img0,img1)
+      loss_contrastive = criterion(output1,output2,label)
+      loss_contrastive.backward()
+      optimizer.step()
+      loss.append(loss_contrastive.item())
+    loss = np.array(loss)
+    return loss.mean()/len(train_dataloader)
 
 
-# set the device to cuda
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = train()
-torch.save(model.state_dict(), "model.pt")
-print("Model Saved Successfully")
+def eval(eval_dataloader):
+    loss=[] 
+    counter=[]
+    iteration_number = 0
+    for i, data in enumerate(eval_dataloader,0):
+      img0, img1 , label = data
+      img0, img1 , label = img0.cuda(), img1.cuda() , label.cuda()
+      output1,output2 = net(img0,img1)
+      loss_contrastive = criterion(output1,output2,label)
+      loss.append(loss_contrastive.item())
+    loss = np.array(loss)
+    return loss.mean()/len(eval_dataloader)
+
+
+for epoch in range(1,config.epochs):
+  best_eval_loss = 9999
+  train_loss = train(train_dataloader)
+  eval_loss = eval(eval_dataloader)
+
+  print(f"Training loss{train_loss}")
+  print("-"*20)
+  print(f"Eval loss{eval_loss}")
+
+  if eval_loss<best_eval_loss:
+    best_eval_loss = eval_loss
+    print("-"*20)
+    print(f"Best Eval loss{best_eval_loss}")
+    torch.save(net.state_dict(), "/content/model.pth")
+    print("Model Saved Successfully") 
 
 # Load the test dataset
 test_dataset = SiameseDataset(
